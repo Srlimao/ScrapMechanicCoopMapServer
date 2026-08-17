@@ -92,10 +92,12 @@ wss.on('connection', (ws, req) => {
             const seed = msg.seed || 151054709;
             peerName = msg.name || 'Host';
             peerColor = msg.color || '#00e5ff';
+            const cells = Array.isArray(msg.cells) && msg.cells.length > 0 ? msg.cells : null;
 
             const room = {
                 code,
                 seed,
+                cells,
                 hostId: peerId,
                 createdAt: Date.now(),
                 peers: new Map()
@@ -106,12 +108,14 @@ wss.on('connection', (ws, req) => {
             rooms.set(code, room);
             currentRoomCode = code;
 
-            console.log(`[Relay] Room created: #${code} (Seed: ${seed}) by ${peerName} (${peerId})`);
+            const cellInfo = cells ? ` (${cells.length} cells attached)` : '';
+            console.log(`[Relay] Room created: #${code} (Seed: ${seed})${cellInfo} by ${peerName} (${peerId})`);
 
             ws.send(JSON.stringify({
                 type: 'room_created',
                 roomCode: code,
                 seed: room.seed,
+                cells: room.cells,
                 peerId: peerId,
                 isHost: true,
                 peers: []
@@ -149,6 +153,7 @@ wss.on('connection', (ws, req) => {
                 type: 'room_joined',
                 roomCode: code,
                 seed: room.seed,
+                cells: room.cells,
                 peerId: peerId,
                 isHost: false,
                 peers: existingPeers
@@ -159,6 +164,18 @@ wss.on('connection', (ws, req) => {
                 type: 'peer_joined',
                 peer: { id: peerId, name: peerName, color: peerColor, isHost: false }
             }, peerId);
+            return;
+        }
+
+        // 2.5 UPDATE ROOM CELLS (Host can push fresh cell atlas to all peers)
+        if (type === 'update_cells' && currentRoomCode) {
+            const room = rooms.get(currentRoomCode);
+            if (room && room.hostId === peerId && Array.isArray(msg.cells)) {
+                room.cells = msg.cells;
+                if (msg.seed) room.seed = msg.seed;
+                broadcastToRoom(currentRoomCode, { type: 'cells_updated', seed: room.seed, cells: room.cells }, peerId);
+                console.log(`[Relay] Host updated ${room.cells.length} cells in Room #${currentRoomCode}`);
+            }
             return;
         }
 
