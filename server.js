@@ -244,12 +244,17 @@ wss.on('connection', (ws, req) => {
         if (!currentRoomCode) return;
         const room = rooms.get(currentRoomCode);
         if (room) {
+            const wasHost = room.hostId === peerId;
             room.peers.delete(peerId);
-            console.log(`[Relay] ${peerName} (${peerId}) disconnected from #${currentRoomCode}`);
+            console.log(`[Relay] ${peerName} (${peerId}${wasHost ? ', Host' : ''}) disconnected from #${currentRoomCode}`);
 
-            if (room.peers.size === 0) {
+            if (room.peers.size === 0 || wasHost) {
+                // If room is empty or the host left, broadcast room closure and delete room from memory
+                if (wasHost && room.peers.size > 0) {
+                    broadcastToRoom(currentRoomCode, { type: 'room_closed', message: 'Host has closed the session.' });
+                }
                 rooms.delete(currentRoomCode);
-                console.log(`[Relay] Room #${currentRoomCode} closed (empty).`);
+                console.log(`[Relay] Room #${currentRoomCode} purged from memory.`);
             } else {
                 broadcastToRoom(currentRoomCode, { type: 'peer_left', peerId: peerId });
             }
