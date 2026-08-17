@@ -229,6 +229,17 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
+        // 4.5 SQUAD ENTITIES AUTO-SYNC
+        if (type === 'squad_entities' && currentRoomCode) {
+            broadcastToRoom(currentRoomCode, {
+                type: 'squad_entities_broadcast',
+                authorId: peerId,
+                entities: msg.entities
+            }, peerId);
+            console.log(`[Relay] Broadcasted updated entities in Room #${currentRoomCode} from ${peerName}`);
+            return;
+        }
+
         // 5. UPDATE ROOM SEED (Host Only)
         if (type === 'update_seed' && currentRoomCode) {
             const room = rooms.get(currentRoomCode);
